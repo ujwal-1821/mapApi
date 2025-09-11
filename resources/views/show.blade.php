@@ -20,6 +20,7 @@
             <th>Latitude</th>
             <th>Longitude</th>
             <th>Created At</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -30,6 +31,12 @@
               <td>{{ $location->latitude }}</td>
               <td>{{ $location->longitude }}</td>
               <td>{{ $location->created_at->format('d M Y, H:i') }}</td>
+              <td>
+              <a href="{{ route('map.index', ['lat' => $location->latitude, 'lon' => $location->longitude]) }}" target="_blank"
+                 class="btn btn-sm btn-primary">
+               <i class="bi bi-eye "></i> View on Map
+              </a>
+            </td>
             </tr>
           @endforeach
         </tbody>
