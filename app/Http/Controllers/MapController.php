@@ -10,7 +10,13 @@ class MapController extends Controller
 {
     public function index()
     {
-        return view('map');
+        $data['lat'] = session('map_lat');
+        $data['lon'] = session('map_lon');
+        $data['viewOnly'] = session('map_view_only', false);
+
+        session()->forget(['map_lat', 'map_lon', 'map_view_only']);
+
+        return view('map', $data);
     }
 
     public function geocode(Request $request)
@@ -94,5 +100,16 @@ class MapController extends Controller
         $data['locations'] = Location::latest()->get();
 
         return view('show', $data);
+    }
+
+    public function showLocation($id)
+    {
+        $location = Location::findOrFail($id);
+        session([
+            'map_lat' => $location->latitude,
+            'map_lon' => $location->longitude,
+            'map_view_only' => true,
+        ]);
+        return redirect()->route('map.index');
     }
 }

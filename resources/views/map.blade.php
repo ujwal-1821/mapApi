@@ -9,7 +9,7 @@
             height: 520px;
             margin-bottom: 15px;
             border-radius: 8px;
-            position: relative; /* Added for spinner overlay positioning */
+            position: relative;
         }
 
         .leaflet-tooltip {
@@ -32,7 +32,7 @@
             background: rgba(255, 255, 255, 0.7);
             padding: 15px 25px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
             text-align: center;
         }
     </style>
@@ -48,11 +48,17 @@
     <div class="">
         <label for="search" class="form-label fw-bold">Search</label>
     </div>
-    <div class="input-group mb-3" style="max-width: 550px;">
-        <input id="search" class="form-control" placeholder="Type an address or place">
+    <div class="input-group mb-3" style="max-width: 550px; position: relative;">
+        <input id="search" class="form-control" placeholder="Type an address or place" autocomplete="off">
         <button id="searchBtn" class="btn btn-primary ms-1">Search</button>
         <button id="clearBtn" class="btn btn-secondary ms-1">Clear Search</button>
+
+        <!-- Suggestions container -->
+        <div id="suggestions" class="list-group position-absolute w-100 shadow-sm"
+            style="z-index: 2000; top: 100%; left: 0; display: none; max-height: 200px; overflow-y: auto;">
+        </div>
     </div>
+
 
     <div id="map"></div>
 
@@ -79,7 +85,15 @@
                 <input id="longitude" name="longitude" class="form-control" readonly>
             </div>
         </div>
-        <button type="submit" class="btn btn-success mt-3">Save</button>
+        <button type="submit" id="saveBtn" class="btn btn-success mt-3"
+            @if ($viewOnly) disabled @endif>
+            Save
+        </button>
+        @if ($viewOnly)
+            <div class="alert alert-info mt-2">
+                You are viewing a saved location. Saving is disabled.
+            </div>
+        @endif
     </form>
 
     <!-- Confirm Modal -->
@@ -160,6 +174,7 @@
         function showMapLoading() {
             document.getElementById('mapLoadingOverlay').style.display = 'block';
         }
+
         function hideMapLoading() {
             document.getElementById('mapLoadingOverlay').style.display = 'none';
         }
@@ -172,7 +187,9 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken
                 },
-                body: JSON.stringify({ text })
+                body: JSON.stringify({
+                    text
+                })
             });
             return res.json();
         }
@@ -184,7 +201,10 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken
                 },
-                body: JSON.stringify({ lat, lon })
+                body: JSON.stringify({
+                    lat,
+                    lon
+                })
             });
             return res.json();
         }
@@ -247,7 +267,10 @@
 
         // Map click event with reverse geocoding
         map.on('click', async (e) => {
-            const { lat, lng } = e.latlng;
+            const {
+                lat,
+                lng
+            } = e.latlng;
             updateLocation(lat, lng, 'Loading...');
             showMapLoading();
 
@@ -332,28 +355,25 @@
             });
             return params;
         }
-window.addEventListener('DOMContentLoaded', () => {
-    const params = getQueryParams();
-    if (params.lat && params.lon) {
-        const lat = parseFloat(params.lat);
-        const lon = parseFloat(params.lon);
-        if (!isNaN(lat) && !isNaN(lon)) {
-            showMapLoading(); // show spinner here!
-            reverseGeocode(lat, lon).then(data => {
-                let name = 'Unknown Location';
-                if (data && data.features && data.features.length > 0) {
-                    name = data.features[0].properties.label || data.features[0].properties.name || name;
-                }
-                updateLocation(lat, lon, name);
-            }).catch(() => {
-                updateLocation(lat, lon, 'Unknown Location');
-            }).finally(() => {
-                hideMapLoading(); // hide spinner here!
-            });
-        }
-    }
-});
-
+        window.addEventListener('DOMContentLoaded', () => {
+            const lat = {{ $lat ?? 'null' }};
+            const lon = {{ $lon ?? 'null' }};
+            if (lat && lon) {
+                showMapLoading();
+                reverseGeocode(lat, lon).then(data => {
+                    let name = 'Unknown Location';
+                    if (data && data.features && data.features.length > 0) {
+                        name = data.features[0].properties.label || data.features[0].properties.name ||
+                            name;
+                    }
+                    updateLocation(lat, lon, name);
+                }).catch(() => {
+                    updateLocation(lat, lon, 'Unknown Location');
+                }).finally(() => {
+                    hideMapLoading();
+                });
+            }
+        });
 
         function clearSearch() {
             if (marker) {
@@ -367,5 +387,70 @@ window.addEventListener('DOMContentLoaded', () => {
 
             map.setView([20.5937, 78.9629], 5);
         }
+
+        // --- Debounce function ---
+        function debounce(fn, delay = 100) { // faster debounce
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        const suggestionsBox = document.getElementById("suggestions");
+        const searchInput = document.getElementById("search");
+
+        // Show suggestions in dropdown
+        function showSuggestions(features) {
+            suggestionsBox.innerHTML = "";
+            if (!features || features.length === 0) {
+                suggestionsBox.style.display = "none";
+                return;
+            }
+            features.forEach(f => {
+                const label = f.properties.label || f.properties.name;
+                const item = document.createElement("button");
+                item.className = "list-group-item list-group-item-action";
+                item.textContent = label;
+                item.type = "button";
+                item.onclick = () => {
+                    const [lon, lat] = f.geometry.coordinates;
+                    updateLocation(lat, lon, label);
+                    suggestionsBox.style.display = "none";
+                    searchInput.value = label;
+                };
+                suggestionsBox.appendChild(item);
+            });
+            suggestionsBox.style.display = "block";
+        }
+
+        // Handle input typing with debounce
+        const handleSearchInput = debounce(async () => {
+            const text = searchInput.value.trim();
+            if (text.length < 1) { // only search if at least 1 chars
+                suggestionsBox.style.display = "none";
+                return;
+            }
+            try {
+                const data = await geocode(text);
+                if (data && data.features) {
+                    showSuggestions(data.features);
+                } else {
+                    showSuggestions([]);
+                }
+            } catch (err) {
+                console.error("Suggestion error:", err);
+                showSuggestions([]);
+            }
+        }, 200);
+
+        searchInput.addEventListener("input", handleSearchInput);
+
+        // Hide suggestions if clicked outside
+        document.addEventListener("click", (e) => {
+            if (!suggestionsBox.contains(e.target) && e.target !== searchInput) {
+                suggestionsBox.style.display = "none";
+            }
+        });
     </script>
 @endpush

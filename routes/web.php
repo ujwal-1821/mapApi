@@ -11,4 +11,5 @@ Route::get('/map', [MapController::class, 'index'])->name('map.index');
 Route::post('/map/geocode', [MapController::class, 'geocode'])->name('map.geocode');
 Route::post('/locations', [MapController::class, 'store'])->name('locations.store');
 Route::get('/all-locations', [MapController::class, 'show'])->name('map.show');
+Route::get('/map/show/{id}', [MapController::class, 'showLocation'])->name('map.showLocation');
 
