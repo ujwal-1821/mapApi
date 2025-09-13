@@ -102,6 +102,10 @@
                         class="nav-link {{ request()->routeIs('map.show') ? 'active' : '' }}">
                         <i class="bi bi-geo-alt me-2 text-success"></i> Saved Locations
                     </a>
+                    <a href="{{ route('distance.index') }}"
+                        class="nav-link {{ request()->routeIs('map.show') ? 'active' : '' }}">
+                        <i class="bi bi-geo-alt me-2 text-success"></i>Distance
+                    </a>
                 </nav>
             </div>
         </div>
